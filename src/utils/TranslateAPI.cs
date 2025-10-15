@@ -81,26 +81,42 @@ namespace LiveCaptionsTranslator.utils
             HttpResponseMessage response;
             try
             {
-                while (true)
+                var requestData = LLMRequestDataFactory.Create(7, 
+                    config.ModelName, messages, config.Temperature);
+                
+                string jsonContent = JsonSerializer.Serialize(requestData, requestData.GetType());
+                var content = new StringContent(jsonContent, Encoding.UTF8, "application/json");
+
+                response = await client.PostAsync(TextUtil.NormalizeUrl(config.ApiUrl), content, token);
+                
+                if (response.StatusCode != HttpStatusCode.BadRequest &&
+                    response.StatusCode != HttpStatusCode.UnprocessableEntity)
+                    goto ProcessResponse;
+
+                openai_fallback_index = 0; 
+                
+                while (openai_fallback_index < LLMRequestDataFactory.FallbackCount)
                 {
-                    var requestData = LLMRequestDataFactory.Create(openai_fallback_index,
+                    if (openai_fallback_index == 7) 
+                    {
+                        openai_fallback_index++;
+                        continue;
+                    }
+                    
+                    requestData = LLMRequestDataFactory.Create(openai_fallback_index,
                         config.ModelName, messages, config.Temperature);
-                    string jsonContent = JsonSerializer.Serialize(requestData, requestData.GetType());
-                    var content = new StringContent(jsonContent, Encoding.UTF8, "application/json");
+                    jsonContent = JsonSerializer.Serialize(requestData, requestData.GetType());
+                    content = new StringContent(jsonContent, Encoding.UTF8, "application/json");
 
                     response = await client.PostAsync(TextUtil.NormalizeUrl(config.ApiUrl), content, token);
                     if (response.StatusCode != HttpStatusCode.BadRequest &&
                         response.StatusCode != HttpStatusCode.UnprocessableEntity)
-                        break;
+                        goto ProcessResponse;
+                    
                     Thread.Sleep(15);
-
                     openai_fallback_index++;
-                    if (openai_fallback_index >= LLMRequestDataFactory.FallbackCount)
-                    {
-                        openai_fallback_index = 0;
-                        break;
-                    }
                 }
+                
             }
             catch (OperationCanceledException ex)
             {
@@ -114,6 +130,7 @@ namespace LiveCaptionsTranslator.utils
                 return $"[ERROR] Translation Failed: {ex.Message}";
             }
 
+        ProcessResponse:
             if (response.IsSuccessStatusCode)
             {
                 string responseString = await response.Content.ReadAsStringAsync();

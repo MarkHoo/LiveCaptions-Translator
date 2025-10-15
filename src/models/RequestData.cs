@@ -75,11 +75,6 @@ namespace LiveCaptionsTranslator.models
         : BaseLLMRequestData(model, messages, temperature)
     {
         // Supported Platform: OpenAI, Silicon Flow (For reasoning models)
-        public class Reasoning
-        {
-            public string effort { get; set; } = "low";
-        }
-        public Reasoning reasoning { get; set; } = new ();
     }
     
     public class XAIRequestData(string model, List<BaseLLMConfig.Message> messages, double temperature)
