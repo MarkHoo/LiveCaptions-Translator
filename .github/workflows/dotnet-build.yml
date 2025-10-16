@@ -36,7 +36,7 @@ jobs:
       - name: Restore Dependencies
         run: dotnet restore
 
-      - name: Build
+      - name: Build and Publish
         run: |
           dotnet publish -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:EnableCompressionInSingleFile=true -o ./publish/x64/selfcontained
           del ./publish/x64/selfcontained/*.pdb 2>nul || echo "No pdb found in x64 selfcontained"
@@ -52,12 +52,23 @@ jobs:
 
       - name: Run Tests
         run: dotnet test --verbosity normal
+      
+      - name: Create Zip Archive
+        run: |
+          mv ./publish/x64/framework/LiveCaptionsTranslator.exe ./publish/LiveCaptionsTranslator-win-x64.exe
+          mv ./publish/x64/selfcontained/LiveCaptionsTranslator.exe ./publish/LiveCaptionsTranslator-win-x64-withruntime.exe
+          mv ./publish/arm64/framework/LiveCaptionsTranslator.exe ./publish/LiveCaptionsTranslator-win-arm64.exe
+          mv ./publish/arm64/selfcontained/LiveCaptionsTranslator.exe ./publish/LiveCaptionsTranslator-win-arm64-withruntime.exe
+          
+          (Get-Item -Path ".\publish\*.exe") | Compress-Archive -DestinationPath ".\LiveCaptionsTranslator.zip" -CompressionLevel Optimal
+          Remove-Item -Path ".\publish" -Recurse -Force
+        shell: pwsh
 
       - name: Upload Build Artifacts
         uses: actions/upload-artifact@v4
         with:
           name: LiveCaptionsTranslator
-          path: ./publish
+          path: LiveCaptionsTranslator.zip
 
   release:
     name: Create GitHub Release
@@ -70,23 +81,12 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: LiveCaptionsTranslator
-          path: ./release
-
-      - name: Create ZIP Files and rename EXE
-        run: |
-          cd release
-          mv x64/framework/LiveCaptionsTranslator.exe LiveCaptionsTranslator-win-x64.exe
-          mv arm64/framework/LiveCaptionsTranslator.exe LiveCaptionsTranslator-win-arm64.exe
-          mv x64/selfcontained/LiveCaptionsTranslator.exe LiveCaptionsTranslator-win-x64-withruntime.exe
-          mv arm64/selfcontained/LiveCaptionsTranslator.exe LiveCaptionsTranslator-win-arm64-withruntime.exe
+          path: .
 
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            release/LiveCaptionsTranslator-win-x64.exe
-            release/LiveCaptionsTranslator-win-x64-withruntime.exe
-            release/LiveCaptionsTranslator-win-arm64.exe
-            release/LiveCaptionsTranslator-win-arm64-withruntime.exe
+            LiveCaptionsTranslator/LiveCaptionsTranslator.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
